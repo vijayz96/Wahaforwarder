@@ -1,5 +1,7 @@
 #!/bin/sh
-# Start the Python bot in the background
+
+# Start the Python bot
 python3 /app/bot.py &
-# Start WAHA (main process)
-waha start
+
+# Keep container running
+sleep infinity
