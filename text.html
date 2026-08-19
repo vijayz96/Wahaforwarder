@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Number Picker • Copy & Next</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        }
+        body {
+            background: #f5f7fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 16px;
+        }
+        .card {
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.08);
+            padding: 32px;
+            max-width: 600px;
+            width: 100%;
+        }
+        h1 {
+            font-size: 24px;
+            margin-top: 0;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        .sub {
+            color: #64748b;
+            font-size: 14px;
+            margin-top: -4px;
+            margin-bottom: 24px;
+        }
+        textarea {
+            width: 100%;
+            height: 160px;
+            padding: 14px;
+            border: 2px solid #e2e8f0;
+            border-radius: 16px;
+            font-size: 15px;
+            resize: vertical;
+            transition: border-color 0.2s;
+            font-family: 'JetBrains Mono', monospace, system-ui;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+        .controls {
+            display: flex;
+            gap: 12px;
+            margin: 18px 0 24px;
+            flex-wrap: wrap;
+        }
+        button {
+            background: #eef2f6;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.15s;
+            flex: 1 1 auto;
+        }
+        button:hover {
+            background: #e2e8f0;
+        }
+        button.primary {
+            background: #1e293b;
+            color: white;
+        }
+        button.primary:hover {
+            background: #0f172a;
+        }
+        button.success {
+            background: #10b981;
+            color: white;
+        }
+        button.success:hover {
+            background: #059669;
+        }
+        .display-area {
+            background: #f8fafc;
+            border-radius: 20px;
+            padding: 32px 20px;
+            text-align: center;
+            margin-top: 8px;
+            border: 2px dashed #d1d5db;
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .number {
+            font-size: 44px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: #0f172a;
+            font-family: 'JetBrains Mono', monospace;
+            word-break: break-all;
+        }
+        .counter {
+            font-size: 14px;
+            color: #94a3b8;
+            margin-top: 10px;
+        }
+        .info {
+            margin-top: 10px;
+            color: #22c55e;
+            font-weight: 500;
+            font-size: 14px;
+            min-height: 24px;
+        }
+        .hidden {
+            display: none;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 13px;
+            color: #94a3b8;
+            text-align: center;
+        }
+        .badge {
+            display: inline-block;
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 4px 12px;
+            border-radius: 40px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>📋 Number Picker</h1>
+        <div class="sub">Paste numbers (one per line) → country codes are removed automatically</div>
+
+        <textarea id="inputArea" placeholder="+91 1800 202 4454&#10;+91 484 401 4055&#10;+91 98462 93339&#10;..."></textarea>
+
+        <div class="controls">
+            <button id="startBtn" class="primary">▶ Start</button>
+            <button id="resetBtn">⟲ Reset</button>
+        </div>
+
+        <div id="displayArea" class="display-area hidden">
+            <div class="badge">🇮🇳 Country code removed</div>
+            <div class="number" id="currentNumber">—</div>
+            <div class="counter" id="counter">0 / 0</div>
+            <div class="info" id="copyStatus"></div>
+            <div style="margin-top: 18px;">
+                <button id="copyNextBtn" class="success">📋 Copy & Next</button>
+                <button id="prevBtn" style="margin-left: 8px;">◀ Prev</button>
+            </div>
+        </div>
+
+        <div class="footer">Numbers are copied <strong>without</strong> the country code (e.g. +91 is removed).</div>
+    </div>
+
+    <script>
+        (function() {
+            const inputArea = document.getElementById('inputArea');
+            const startBtn = document.getElementById('startBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const displayArea = document.getElementById('displayArea');
+            const currentNumberEl = document.getElementById('currentNumber');
+            const counterEl = document.getElementById('counter');
+            const copyStatus = document.getElementById('copyStatus');
+            const copyNextBtn = document.getElementById('copyNextBtn');
+            const prevBtn = document.getElementById('prevBtn');
+
+            let numbers = [];
+            let currentIndex = 0;
+            let isRunning = false;
+
+            // Parse numbers and strip country codes (+91, +1, +44, etc.)
+            function parseNumbers(text) {
+                return text.split(/\n/)
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0)
+                    .map(line => {
+                        // Remove any leading +<countrycode> and optional space
+                        // Examples: "+91 1800..." → "1800...", "+1 212..." → "212..."
+                        return line.replace(/^\+[0-9]{1,3}\s*/, '');
+                    });
+            }
+
+            function displayCurrent() {
+                if (!isRunning || numbers.length === 0) {
+                    currentNumberEl.textContent = '—';
+                    counterEl.textContent = '0 / 0';
+                    return;
+                }
+                currentNumberEl.textContent = numbers[currentIndex] || '—';
+                counterEl.textContent = `${currentIndex + 1} / ${numbers.length}`;
+                copyStatus.textContent = '';
+            }
+
+            function copyCurrentNumber() {
+                if (!isRunning || numbers.length === 0 || currentIndex >= numbers.length) {
+                    return false;
+                }
+                const num = numbers[currentIndex];
+                if (!num) return false;
+
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(num)
+                        .then(() => {
+                            copyStatus.textContent = '✅ Copied!';
+                            copyStatus.style.color = '#22c55e';
+                            setTimeout(() => { copyStatus.textContent = ''; }, 1000);
+                        })
+                        .catch(() => {
+                            fallbackCopy(num);
+                        });
+                } else {
+                    fallbackCopy(num);
+                }
+                return true;
+            }
+
+            function fallbackCopy(text) {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    copyStatus.textContent = '✅ Copied!';
+                    copyStatus.style.color = '#22c55e';
+                    setTimeout(() => { copyStatus.textContent = ''; }, 1000);
+                } catch (err) {
+                    copyStatus.textContent = '❌ Copy failed';
+                    copyStatus.style.color = '#ef4444';
+                }
+                document.body.removeChild(textarea);
+            }
+
+            function goNext() {
+                if (!isRunning || numbers.length === 0) return;
+                if (currentIndex < numbers.length - 1) {
+                    currentIndex++;
+                    displayCurrent();
+                } else {
+                    copyCurrentNumber();
+                    copyStatus.textContent = '🎯 Last number copied!';
+                    copyStatus.style.color = '#f59e0b';
+                    setTimeout(() => { copyStatus.textContent = ''; }, 2000);
+                }
+            }
+
+            function goPrev() {
+                if (!isRunning || numbers.length === 0) return;
+                if (currentIndex > 0) {
+                    currentIndex--;
+                    displayCurrent();
+                } else {
+                    copyStatus.textContent = '📍 Already at first';
+                    copyStatus.style.color = '#94a3b8';
+                    setTimeout(() => { copyStatus.textContent = ''; }, 1200);
+                }
+            }
+
+            function start() {
+                const raw = inputArea.value;
+                const parsed = parseNumbers(raw);
+                if (parsed.length === 0) {
+                    alert('Please paste at least one number.');
+                    return;
+                }
+                numbers = parsed;
+                currentIndex = 0;
+                isRunning = true;
+                displayArea.classList.remove('hidden');
+                displayCurrent();
+            }
+
+            function reset() {
+                isRunning = false;
+                numbers = [];
+                currentIndex = 0;
+                displayArea.classList.add('hidden');
+                inputArea.value = '';
+                copyStatus.textContent = '';
+                currentNumberEl.textContent = '—';
+                counterEl.textContent = '0 / 0';
+            }
+
+            startBtn.addEventListener('click', start);
+            resetBtn.addEventListener('click', reset);
+            copyNextBtn.addEventListener('click', function() {
+                if (!isRunning) {
+                    copyStatus.textContent = '⚠️ Click "Start" first';
+                    copyStatus.style.color = '#f59e0b';
+                    setTimeout(() => { copyStatus.textContent = ''; }, 1500);
+                    return;
+                }
+                copyCurrentNumber();
+                goNext();
+            });
+            prevBtn.addEventListener('click', goPrev);
+
+            inputArea.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    start();
+                }
+            });
+        })();
+    </script>
+</body>
+</html>
